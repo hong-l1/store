@@ -1,4 +1,4 @@
-package demo
+package store
 
 type Result struct {
 	Code    int
