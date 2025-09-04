@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
-
 func Handler(ctx *gin.Context) {
 	m := ctx.Request.Method
 	if m != http.MethodGet {
@@ -26,7 +25,6 @@ func Handler(ctx *gin.Context) {
 func Locate(name string, producer sarama.SyncProducer) string {
 	producer.SendMessage(sarama.)
 }
-
 func Exist(name string) bool {
 	return Locate(name) != ""
 }
