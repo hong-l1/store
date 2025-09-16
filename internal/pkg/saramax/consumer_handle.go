@@ -1,7 +1,7 @@
 package saramax
 
 import (
-	logger "awesomeProject1/store/pkg/zapx"
+	logger2 "awesomeProject1/internal/pkg/zapx"
 	"encoding/json"
 	"github.com/IBM/sarama"
 )
@@ -11,7 +11,7 @@ type Fn interface {
 }
 
 type Handler struct {
-	l  logger.Logger
+	l  logger2.Loggerv1
 	fn Fn
 }
 
@@ -30,10 +30,10 @@ func (s Handler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.
 		err := json.Unmarshal(msg.Value, &t)
 		if err != nil {
 			s.l.Error("反序列化失败",
-				logger.Int32("partition", msg.Partition),
-				logger.Int64("offset", msg.Offset),
-				logger.String("topic", msg.Topic),
-				logger.Error(err))
+				logger2.Int32("partition", msg.Partition),
+				logger2.Int64("offset", msg.Offset),
+				logger2.String("topic", msg.Topic),
+				logger2.Error(err))
 			continue
 		}
 		for i := 0; i < 3; i++ {
@@ -42,24 +42,24 @@ func (s Handler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.
 				break
 			}
 			s.l.Error("处理消息失败",
-				logger.Int32("partition", msg.Partition),
-				logger.Int64("offset", msg.Offset),
-				logger.String("topic", msg.Topic),
-				logger.Error(err))
+				logger2.Int32("partition", msg.Partition),
+				logger2.Int64("offset", msg.Offset),
+				logger2.String("topic", msg.Topic),
+				logger2.Error(err))
 		}
 		if err != nil {
 			s.l.Error("处理消息失败-重试上限",
-				logger.Int32("partition", msg.Partition),
-				logger.Int64("offset", msg.Offset),
-				logger.String("topic", msg.Topic),
-				logger.Error(err))
+				logger2.Int32("partition", msg.Partition),
+				logger2.Int64("offset", msg.Offset),
+				logger2.String("topic", msg.Topic),
+				logger2.Error(err))
 		} else {
 			session.MarkMessage(msg, "")
 		}
 	}
 	return nil
 }
-func NewHandler(l logger.Logger, fn Fn) *Handler {
+func NewHandler(l logger2.Loggerv1, fn Fn) *Handler {
 	return &Handler{
 		l:  l,
 		fn: fn,
