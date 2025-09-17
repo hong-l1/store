@@ -9,23 +9,23 @@ import (
 	"net/http"
 )
 
-type ObjectHandler struct {
+type DataServerHandler struct {
 	svc service2.ObjectService
 	l   logger2.Loggerv1
 }
 
-func NewObjectHandler(svc service2.ObjectService, l logger2.Loggerv1) *ObjectHandler {
-	return &ObjectHandler{svc: svc, l: l}
+func NewObjectHandler(svc service2.ObjectService, l logger2.Loggerv1) *DataServerHandler {
+	return &DataServerHandler{svc: svc, l: l}
 }
-func (h *ObjectHandler) RegisterObjectRoute(server *gin.Engine) {
-	v1 := server.Group("/api/")
+func (h *DataServerHandler) RegisterObjectRoute(server *gin.Engine) {
+	v1 := server.Group("/objects")
 	{
-		v1.PUT("/objects/:filename", h.PUT)
-		v1.GET("/objects/:filename", h.GET)
+		v1.PUT("/:filename", h.PUT)
+		v1.GET("/:filename", h.GET)
 		//v1.DELETE("/objects/:name", objHandler.Delete)
 	}
 }
-func (h *ObjectHandler) PUT(ctx *gin.Context) {
+func (h *DataServerHandler) PUT(ctx *gin.Context) {
 	name := ctx.Param("filename")
 	err := h.svc.Upload(ctx.Request.Context(), name, ctx.Request.Body)
 	if err != nil {
@@ -38,7 +38,7 @@ func (h *ObjectHandler) PUT(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, internal.Result{Message: "上传成功"})
 }
-func (h *ObjectHandler) GET(ctx *gin.Context) {
+func (h *DataServerHandler) GET(ctx *gin.Context) {
 	name := ctx.Param("filename")
 	reader, err := h.svc.Download(ctx.Request.Context(), name)
 	if err != nil {
