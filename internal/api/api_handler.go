@@ -5,10 +5,11 @@ import (
 	logger2 "awesomeProject1/internal/pkg/zapx"
 	service2 "awesomeProject1/internal/service"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ApiServerHandler struct {
@@ -30,10 +31,17 @@ func (h *ApiServerHandler) RegisterApiServerRoute(server *gin.Engine) {
 		v1.PUT("/:filename", h.PUT)
 		v1.GET("/:filename", h.GET)
 	}
+	// 启动心跳监听和清理死节点
+	go h.svc.ListenHeartbeats(0)
+	go h.svc.CleanDeadNodes()
 }
 func (h *ApiServerHandler) PUT(ctx *gin.Context) {
 	name := ctx.Param("filename")
 	addr := h.svc.ChooseNode(ctx.Request.Context())
+	if addr == "" {
+		ctx.JSON(http.StatusServiceUnavailable, internal.Result{Message: "无可用节点"})
+		return
+	}
 	url := fmt.Sprintf("http://%s/objects/%s", addr, name)
 	req, _ := http.NewRequest("PUT", url, ctx.Request.Body)
 	req.Header = ctx.Request.Header.Clone()
@@ -48,6 +56,10 @@ func (h *ApiServerHandler) PUT(ctx *gin.Context) {
 func (h *ApiServerHandler) GET(ctx *gin.Context) {
 	name := ctx.Param("filename")
 	addr := h.svc.Locate(ctx.Request.Context(), name)
+	if addr == "" {
+		ctx.JSON(http.StatusServiceUnavailable, internal.Result{Message: "无可用节点"})
+		return
+	}
 	url := fmt.Sprintf("http://%s/objects/%s", addr, name)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header = ctx.Request.Header.Clone()

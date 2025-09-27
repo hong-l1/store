@@ -5,6 +5,7 @@ go 1.24
 require (
 	github.com/IBM/sarama v1.46.0
 	github.com/gin-gonic/gin v1.10.1
+	github.com/google/wire v0.7.0
 	go.uber.org/zap v1.27.0
 )
 

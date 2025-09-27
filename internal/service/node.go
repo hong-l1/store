@@ -5,9 +5,11 @@ import (
 	"awesomeProject1/internal/repository"
 	"context"
 	"encoding/json"
-	"github.com/IBM/sarama"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/IBM/sarama"
 )
 
 type Node struct {
@@ -17,7 +19,7 @@ type Node struct {
 	Alive    bool
 }
 
-//NodeService 管理全局节点
+// NodeService 管理全局节点
 type NodeService interface {
 	ListenHeartbeats(partition int32)
 	CleanDeadNodes()
@@ -26,9 +28,10 @@ type NodeService interface {
 	ListenLocateMsg(partition int32)
 	SendMsg() error
 	AddNode(node *Node)
+	HeartbeatTicker()
 }
 type nodeService struct {
-	lock  sync.RWMutex
+	lock  *sync.RWMutex
 	nodes map[string]*Node
 	p     sarama.SyncProducer
 	c     sarama.Consumer
@@ -36,39 +39,55 @@ type nodeService struct {
 	repo  repository.LocateRepository
 }
 
-//给post用的，选择活节点
+// 给post用的，选择活节点
 func (s *nodeService) ChooseNode(ctx context.Context) string {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	for _, v := range s.nodes {
-		return v.Addr
+		if v.Alive {
+			return v.Addr
+		}
 	}
 	return ""
 }
-
-func NewNodeService(l logger2.Loggerv1) NodeService {
-	return &nodeService{l: l}
+func NewNodeService(l logger2.Loggerv1, p sarama.SyncProducer, c sarama.Consumer, repo repository.LocateRepository) NodeService {
+	return &nodeService{
+		l:     l,
+		lock:  &sync.RWMutex{},
+		p:     p,
+		c:     c,
+		repo:  repo,
+		nodes: make(map[string]*Node),
+	}
 }
 func (s *nodeService) ListenHeartbeats(partition int32) {
 	//从消息队列获取心跳
-	pc, err := s.c.ConsumePartition("hearbeat", partition, sarama.OffsetNewest)
+	pc, err := s.c.ConsumePartition("heartbeat", partition, sarama.OffsetNewest)
 	if err != nil {
 		s.l.Error("创建分区消费者失败", logger2.Error(err), logger2.Int32("partition", partition))
 		return
 	}
 	defer pc.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	for {
 		select {
 		case msg, ok := <-pc.Messages():
 			if !ok {
 				s.l.Info("消息通道已关闭", logger2.Int32("partition", partition))
+				return
 			}
-			var node *Node
-			err = json.Unmarshal(msg.Value, node)
-			s.AddNode(node)
+			var node Node
+			err = json.Unmarshal(msg.Value, &node)
+			if err != nil {
+				s.l.Error("心跳反序列化失败", logger2.Error(err))
+				continue
+			}
+			node.LastBeat = time.Now()
+			node.Alive = true
+			s.AddNode(&node)
 		case <-ctx.Done():
-			cancel()
+			return
 		}
 	}
 }
@@ -87,46 +106,15 @@ func (s *nodeService) CleanDeadNodes() {
 	}
 }
 func (s *nodeService) Locate(ctx context.Context, object string) string {
-	//定位所需资源在哪个节点
+	// 快速实现：返回任一活跃节点地址
 	s.lock.RLock()
+	defer s.lock.RUnlock()
 	for _, node := range s.nodes {
 		if node.Alive {
-			_, _, err := s.p.SendMessage(&sarama.ProducerMessage{
-				Topic: "locate",
-				Value: sarama.StringEncoder(object),
-			})
-			if err != nil {
-				//打日志
-				continue
-			}
+			return node.Addr
 		}
 	}
-	s.lock.RUnlock()
-	var results []string
-	go func() {
-		pc, err1 := s.c.ConsumePartition("locate", int32(0), sarama.OffsetNewest)
-		if err1 != nil {
-			s.l.Error("创建分区消费者失败", logger2.Error(err1), logger2.Int32("partition", int32(0)))
-			return
-		}
-		c, cancel := context.WithTimeout(context.Background(), time.Second*2)
-		for {
-			select {
-			case <-c.Done():
-				cancel()
-			case msg, ok := <-pc.Messages():
-				if !ok {
-
-				}
-				var addr *string
-				err1 = json.Unmarshal(msg.Value, &addr)
-				if err1 != nil {
-				}
-				results = append(results, string(msg.Value))
-			}
-		}
-	}()
-	return results[0]
+	return ""
 }
 func (s *nodeService) ListenLocateMsg(partition int32) {
 	pc, err := s.c.ConsumePartition("locate", partition, sarama.OffsetNewest)
@@ -166,4 +154,28 @@ func (s *nodeService) SendMsg() error {
 		Value: sarama.StringEncoder(ip),
 	})
 	return err
+}
+func (s *nodeService) HeartbeatTicker() {
+	ip := s.repo.Getip()
+	ticker := time.NewTicker(1 * time.Second)
+	for range ticker.C {
+		res := strings.Split(ip, ":")
+		node := Node{
+			Name:     res[len(res)-1],
+			Addr:     ip,
+			LastBeat: time.Now(),
+			Alive:    true,
+		}
+		data, err := json.Marshal(&node)
+		if err != nil {
+			panic(err)
+		}
+		_, _, err = s.p.SendMessage(&sarama.ProducerMessage{
+			Topic: "heartbeat",
+			Value: sarama.ByteEncoder(data),
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
 }

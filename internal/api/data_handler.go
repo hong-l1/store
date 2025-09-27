@@ -10,24 +10,26 @@ import (
 )
 
 type DataServerHandler struct {
-	svc service2.ObjectService
-	l   logger2.Loggerv1
+	svc1 service2.ObjectService
+	l    logger2.Loggerv1
+	svc2 service2.NodeService
 }
 
-func NewObjectHandler(svc service2.ObjectService, l logger2.Loggerv1) *DataServerHandler {
-	return &DataServerHandler{svc: svc, l: l}
+func NewObjectHandler(svc1 service2.ObjectService, svc2 service2.NodeService, l logger2.Loggerv1) *DataServerHandler {
+	return &DataServerHandler{svc1: svc1, l: l, svc2: svc2}
 }
 func (h *DataServerHandler) RegisterObjectRoute(server *gin.Engine) {
 	v1 := server.Group("/objects")
 	{
 		v1.PUT("/:filename", h.PUT)
 		v1.GET("/:filename", h.GET)
-		//v1.DELETE("/objects/:name", objHandler.Delete)
 	}
+	go h.svc2.ListenLocateMsg(0)
+	go h.svc2.HeartbeatTicker()
 }
 func (h *DataServerHandler) PUT(ctx *gin.Context) {
 	name := ctx.Param("filename")
-	err := h.svc.Upload(ctx.Request.Context(), name, ctx.Request.Body)
+	err := h.svc1.Upload(ctx.Request.Context(), name, ctx.Request.Body)
 	if err != nil {
 		h.l.Error("文件上传失败",
 			logger2.Error(err),
@@ -40,7 +42,7 @@ func (h *DataServerHandler) PUT(ctx *gin.Context) {
 }
 func (h *DataServerHandler) GET(ctx *gin.Context) {
 	name := ctx.Param("filename")
-	reader, err := h.svc.Download(ctx.Request.Context(), name)
+	reader, err := h.svc1.Download(ctx.Request.Context(), name)
 	if err != nil {
 		ctx.JSON(http.StatusOK, internal.Result{Code: 5, Message: "系统错误"})
 		h.l.Error("文件获取失败",
@@ -58,15 +60,3 @@ func (h *DataServerHandler) GET(ctx *gin.Context) {
 		return
 	}
 }
-
-//// 删除对象
-//func (h *ObjectHandler) Delete(c *gin.Context) {
-//	name := c.Param("name")
-//
-//	if err := h.svc.Delete(c.Request.Context(), name); err != nil {
-//		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-//		return
-//	}
-//
-//	c.JSON(http.StatusOK, gin.H{"message": "delete success"})
-//}
