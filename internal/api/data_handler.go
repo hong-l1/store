@@ -51,7 +51,8 @@ func (h *DataServerHandler) GET(ctx *gin.Context) {
 		)
 		return
 	}
-	if _, err := io.Copy(ctx.Writer, reader); err != nil {
+	n, err := io.Copy(ctx.Writer, reader)
+	if err != nil {
 		h.l.Error("文件写入响应失败",
 			logger2.Error(err),
 			logger2.String("文件名", name),
@@ -59,4 +60,5 @@ func (h *DataServerHandler) GET(ctx *gin.Context) {
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}
+	h.l.Info("写出的字节数", logger2.Int64("bytes", n))
 }

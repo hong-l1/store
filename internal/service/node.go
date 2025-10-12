@@ -5,11 +5,10 @@ import (
 	"awesomeProject1/internal/repository"
 	"context"
 	"encoding/json"
+	"github.com/IBM/sarama"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/IBM/sarama"
 )
 
 type Node struct {
@@ -62,7 +61,7 @@ func NewNodeService(l logger2.Loggerv1, p sarama.SyncProducer, c sarama.Consumer
 }
 func (s *nodeService) ListenHeartbeats(partition int32) {
 	//从消息队列获取心跳
-	pc, err := s.c.ConsumePartition("heartbeat", partition, sarama.OffsetNewest)
+	pc, err := s.c.ConsumePartition("heartbeat", partition, sarama.OffsetOldest)
 	if err != nil {
 		s.l.Error("创建分区消费者失败", logger2.Error(err), logger2.Int32("partition", partition))
 		return
@@ -123,7 +122,7 @@ func (s *nodeService) ListenLocateMsg(partition int32) {
 		return
 	}
 	defer pc.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	for {
 		select {
 		case msg, ok := <-pc.Messages():

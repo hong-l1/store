@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 )
@@ -25,7 +26,11 @@ func (r *locateRepository) Locate(name string) bool {
 	return !os.IsNotExist(err)
 }
 func (r *locateRepository) Getip() string {
-	//envIP := os.Getenv("NODE_IP")
-	//return envIP
-	return "127.0.0.1:8080"
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
 }

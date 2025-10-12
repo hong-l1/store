@@ -6,6 +6,7 @@ import (
 	"awesomeProject1/internal/api"
 	logger2 "awesomeProject1/internal/pkg/zapx"
 	"awesomeProject1/internal/repository"
+	"awesomeProject1/internal/repository/dao"
 	service2 "awesomeProject1/internal/service"
 	"awesomeProject1/ioc"
 	"github.com/gin-gonic/gin"
@@ -16,6 +17,8 @@ func InitDateServer() *gin.Engine {
 	wire.Build(
 		InitGinEngine,
 		ioc.InitZapLogger,
+		ioc.InitEs,
+		dao.InitEsIndex,
 		logger2.NewZapLogger,
 		repository.NewStorageRepository,
 		service2.NewNodeService,

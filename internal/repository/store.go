@@ -34,5 +34,6 @@ func (s *storageRepository) Download(ctx context.Context, name string) (io.ReadC
 	if err != nil {
 		return nil, err
 	}
+	f.Seek(0, io.SeekStart)
 	return f, nil
 }
